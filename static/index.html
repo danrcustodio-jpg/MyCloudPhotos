@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>My Cloud Photos</title>
+  <link rel="stylesheet" href="/static/css/app.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark"></span>
+        <div>
+          <div class="brand-name">My Cloud Photos</div>
+          <div class="brand-sub">Local organizer</div>
+        </div>
+      </div>
+      <nav class="nav">
+        <button class="nav-item active" data-view="browse">Browse</button>
+        <button class="nav-item" data-view="map">Map</button>
+        <button class="nav-item" data-view="scan">Scan</button>
+        <button class="nav-item" data-view="duplicates">Duplicates</button>
+        <button class="nav-item" data-view="import">Import</button>
+        <button class="nav-item" data-view="archive">Archive</button>
+        <button class="nav-item" data-view="organize">Organize</button>
+        <button class="nav-item" data-view="people">People</button>
+        <button class="nav-item" data-view="converter">File Converter</button>
+        <button class="nav-item" data-view="settings">Settings</button>
+      </nav>
+      <div class="sidebar-stats" id="sidebar-stats">
+        <div class="stat"><span id="stat-count">—</span><label>in app</label></div>
+        <div class="stat"><span id="stat-size">—</span><label>indexed</label></div>
+        <div class="stat"><span id="stat-volume">—</span><label>drive used</label></div>
+        <div class="stat"><span id="stat-folders">—</span><label>folders</label></div>
+      </div>
+      <button type="button" class="scan-mini" id="scan-mini" title="Open Scan page">
+        <div class="scan-mini-ring" aria-hidden="true">
+          <svg viewBox="0 0 36 36">
+            <circle class="scan-mini-bg" cx="18" cy="18" r="15.5" />
+            <circle class="scan-mini-fg" id="scan-mini-fg" cx="18" cy="18" r="15.5" />
+          </svg>
+          <span id="scan-mini-pct">—</span>
+        </div>
+        <div class="scan-mini-text">
+          <strong id="scan-mini-label">Scan</strong>
+          <span id="scan-status">Idle</span>
+        </div>
+      </button>
+    </aside>
+
+    <main class="main">
+      <div id="job-busy-banner" class="job-busy-banner" hidden role="status" aria-live="polite">
+        <div class="job-busy-main">
+          <div class="job-busy-head">
+            <div id="job-busy-pct" class="job-busy-pct" aria-hidden="true">—</div>
+            <div class="job-busy-text">
+              <strong id="job-busy-title">Job running</strong>
+              <span id="job-busy-counts" class="job-busy-counts"></span>
+            </div>
+          </div>
+          <div class="scan-bar job-busy-bar indeterminate" id="job-busy-bar" hidden>
+            <div id="job-busy-bar-fill"></div>
+          </div>
+          <span id="job-busy-detail" class="job-busy-detail muted-label"></span>
+        </div>
+        <div class="job-busy-actions">
+          <span class="job-busy-hint">Browse &amp; Map stay available · other start actions paused</span>
+          <button type="button" id="btn-job-busy-pause" class="btn btn-ghost btn-sm" hidden>Pause</button>
+          <button type="button" id="btn-job-busy-resume" class="btn btn-primary btn-sm" hidden>Resume</button>
+          <button type="button" id="btn-job-busy-cancel" class="btn btn-ghost btn-sm">Cancel job</button>
+        </div>
+      </div>
+
+      <div id="job-wait-overlay" class="job-wait-overlay" hidden role="alertdialog" aria-modal="true" aria-labelledby="job-wait-title">
+        <div class="job-wait-card">
+          <div class="job-wait-spinner" aria-hidden="true"></div>
+          <strong id="job-wait-title">Please wait</strong>
+          <p id="job-wait-detail" class="muted-label">Finishing the current file operation…</p>
+        </div>
+      </div>
+
+      <div id="activity-toast" class="activity-toast" hidden role="status" aria-live="polite">
+        <div class="activity-toast-spinner" aria-hidden="true"></div>
+        <span id="activity-toast-text">Working…</span>
+      </div>
+      <!-- Scan -->
+      <section id="view-scan" class="view">
+        <header class="view-header">
+          <h1>Library scan</h1>
+          <div class="header-actions">
+            <button id="btn-scan" class="btn btn-primary">Scan library</button>
+            <button id="btn-scan-full" class="btn btn-ghost" title="Rehash everything">Full rehash</button>
+            <button id="btn-scan-cancel" class="btn btn-ghost" hidden>Cancel</button>
+          </div>
+        </header>
+
+        <div class="scan-hero">
+          <div class="scan-orbit" id="scan-orbit" aria-hidden="true">
+            <span class="scan-spark"></span>
+            <span class="scan-spark"></span>
+            <span class="scan-spark"></span>
+            <span class="scan-spark"></span>
+            <span class="scan-spark"></span>
+            <span class="scan-spark"></span>
+          </div>
+          <div class="scan-ring-wrap">
+            <svg class="scan-ring" viewBox="0 0 120 120" aria-hidden="true">
+              <circle class="scan-ring-bg" cx="60" cy="60" r="52" />
+              <circle class="scan-ring-fg" id="scan-ring-fg" cx="60" cy="60" r="52" />
+            </svg>
+            <div class="scan-ring-center">
+              <div class="scan-pct" id="scan-pct">—</div>
+              <div class="scan-pct-label" id="scan-pct-label">ready</div>
+            </div>
+          </div>
+          <div class="scan-hero-copy">
+            <p class="scan-headline" id="scan-headline">Index your My Cloud photos</p>
+            <p class="scan-detail" id="scan-detail">
+              Scans save progress as they go. If something interrupts, hit Resume and unchanged files are skipped.
+            </p>
+            <div class="scan-meta-line" id="scan-meta" hidden></div>
+            <div class="scan-warn" id="scan-warn" hidden>Large library — this may take a while</div>
+            <div class="scan-bar" id="scan-bar-track"><div id="scan-bar-fill"></div></div>
+          </div>
+        </div>
+
+        <div class="scan-tiles" id="scan-tiles">
+          <div class="scan-tile"><span id="tile-processed">0</span><label>seen (files)</label></div>
+          <div class="scan-tile accent"><span id="tile-added">0</span><label>new in app</label></div>
+          <div class="scan-tile"><span id="tile-data">—</span><label>data this run</label></div>
+          <div class="scan-tile"><span id="tile-library">—</span><label>indexed library</label></div>
+          <div class="scan-tile"><span id="tile-volume">—</span><label>drive used / total</label></div>
+          <div class="scan-tile"><span id="tile-skipped">0</span><label>unchanged skip</label></div>
+          <div class="scan-tile"><span id="tile-updated">0</span><label>rehashed</label></div>
+          <div class="scan-tile"><span id="tile-errors">0</span><label>errors</label></div>
+          <div class="scan-tile"><span id="tile-eta">—</span><label>ETA</label></div>
+          <div class="scan-tile"><span id="tile-rate">—</span><label>files/sec</label></div>
+          <div class="scan-tile"><span id="tile-rate-bytes">—</span><label>MB/sec</label></div>
+          <div class="scan-tile"><span id="tile-elapsed">—</span><label>elapsed</label></div>
+        </div>
+
+        <div class="scan-film" id="scan-film" aria-hidden="true">
+          <div class="scan-film-track" id="scan-film-track"></div>
+        </div>
+      </section>
+
+      <!-- Browse -->
+      <section id="view-browse" class="view active">
+        <header class="view-header">
+          <h1>Browse</h1>
+          <div class="header-actions">
+            <input type="search" id="search" placeholder="Search filename, folder…" />
+            <select id="smart-filter">
+              <option value="">All media</option>
+            </select>
+            <select id="folder-filter">
+              <option value="">All folders</option>
+            </select>
+            <select id="year-filter" title="Filter by when the file was added/modified on the drive">
+              <option value="">Added · all years</option>
+            </select>
+            <select id="month-filter" title="Filter by when the file was added/modified on the drive">
+              <option value="">Added · all months</option>
+            </select>
+            <select id="sort-filter" title="Sort photos">
+              <option value="date_desc">Date taken · newest</option>
+              <option value="date_asc">Date taken · oldest</option>
+              <option value="mtime_desc">File added · newest</option>
+              <option value="mtime_asc">File added · oldest</option>
+              <option value="name_asc">Name · A–Z</option>
+              <option value="name_desc">Name · Z–A</option>
+            </select>
+          </div>
+        </header>
+        <p class="browse-note">
+          <strong>People</strong> in the sidebar are face-named (scan under People).
+          <strong>Browse by name</strong> is folder/path text only.
+          <strong>Added</strong> year/month and <strong>File added</strong> sort use when the file landed on the drive — not necessarily when the photo was taken.
+        </p>
+        <div id="browse-sel-bar" class="quarantine-bar selection-bar" hidden>
+          <div class="quarantine-bar-text">
+            <strong>Selected</strong>
+            <span id="browse-sel-count" class="sel-pill">0 selected</span>
+            — quarantine (recoverable) or delete forever.
+          </div>
+          <div class="quarantine-bar-actions">
+            <button id="btn-browse-select-all" class="btn btn-ghost btn-sm" type="button">Select all on page</button>
+            <button id="btn-browse-clear" class="btn btn-ghost btn-sm" type="button">Clear</button>
+            <button id="btn-browse-quarantine" class="btn btn-primary btn-sm" type="button">Quarantine selected</button>
+            <button id="btn-browse-delete" class="btn btn-danger btn-sm" type="button">Delete forever</button>
+          </div>
+        </div>
+        <div id="quarantine-bar" class="quarantine-bar" hidden>
+          <div class="quarantine-bar-text">
+            <strong>Quarantine</strong>
+            <span id="quarantine-bar-path" class="muted-label"></span>
+            — select items, then restore or delete forever.
+            <span id="quarantine-sel-count" class="sel-pill">0 selected</span>
+          </div>
+          <div class="quarantine-bar-actions">
+            <button id="btn-q-select-all" class="btn btn-ghost btn-sm" type="button">Select all</button>
+            <button id="btn-q-clear" class="btn btn-ghost btn-sm" type="button">Clear</button>
+            <button id="btn-q-restore" class="btn btn-ghost btn-sm" type="button">Restore selected</button>
+            <button id="btn-q-delete" class="btn btn-danger btn-sm" type="button">Delete forever</button>
+          </div>
+        </div>
+        <div class="browse-layout">
+          <aside class="smart-sidebar" id="smart-sidebar">
+            <h2>People</h2>
+            <input
+              type="search"
+              id="people-browse-filter"
+              class="name-browse-filter"
+              placeholder="Filter people…"
+              autocomplete="off"
+            />
+            <div id="people-browse-list" class="smart-folder-list name-browse-list"></div>
+            <h2 class="sidebar-section">Browse by name</h2>
+            <input
+              type="search"
+              id="name-browse-filter"
+              class="name-browse-filter"
+              placeholder="Filter path names…"
+              autocomplete="off"
+            />
+            <div id="name-browse-list" class="smart-folder-list name-browse-list"></div>
+            <h2 class="sidebar-section">Smart folders</h2>
+            <div id="smart-folder-list" class="smart-folder-list"></div>
+          </aside>
+          <div class="photo-grid" id="photo-grid"></div>
+        </div>
+        <div class="pager">
+          <button id="btn-prev" class="btn btn-ghost btn-sm">Previous</button>
+          <span id="pager-label"></span>
+          <button id="btn-next" class="btn btn-ghost btn-sm">Next</button>
+        </div>
+      </section>
+
+      <!-- Map -->
+      <section id="view-map" class="view">
+        <header class="view-header">
+          <h1>Map</h1>
+          <div class="header-actions">
+            <span id="map-count" class="muted-label">—</span>
+            <button id="btn-map-refresh" class="btn btn-ghost btn-sm">Refresh</button>
+          </div>
+        </header>
+        <div id="map" class="photo-map" aria-label="Photo locations map"></div>
+        <p class="help map-help">
+          Shows photos with GPS in EXIF. Click a marker to open the lightbox.
+        </p>
+      </section>
+
+      <!-- Duplicates -->
+      <section id="view-duplicates" class="view">
+        <header class="view-header">
+          <h1>Duplicates</h1>
+          <div class="header-actions">
+            <button id="btn-exact" class="btn btn-primary btn-sm">Find exact</button>
+            <button id="btn-near" class="btn btn-ghost btn-sm">Find near-dupes</button>
+            <button id="btn-dupe-quarantine" class="btn btn-ghost btn-sm">View quarantine</button>
+            <label class="inline-check" title="When unchecked, duplicates are moved to _quarantine_duplicates on your My Cloud (recoverable). When checked, files are permanently deleted.">
+              <input type="checkbox" id="dupe-delete" />
+              Permanent delete
+            </label>
+          </div>
+        </header>
+        <p class="help" id="dupe-help">
+          <strong>Quarantine</strong> (default for manual actions): moves extras into
+          <code>_quarantine_duplicates</code> on your photo drive — still on the NAS, just out of the library.
+          <strong>Permanent delete</strong> checkbox: erases files for good on manual resolve.
+          Use <strong>View quarantine</strong> to review and permanently delete items already quarantined.
+        </p>
+        <div class="panel dupe-batch-panel" id="dupe-batch-panel">
+          <h2>Full exact dedupe</h2>
+          <p class="help">
+            Processes <strong>every</strong> exact-match group (same file contents): keeps one copy
+            (prefers a dated path), permanently deletes the rest. Not limited to 40 groups.
+            This cannot be undone — prefer a short test on a few groups first if unsure.
+          </p>
+          <div id="dupe-batch-preview" class="status-block">Loading preview…</div>
+          <div class="form-row">
+            <label class="inline-check">
+              <input type="checkbox" id="dupe-batch-confirm" />
+              I understand this permanently deletes duplicate files from My Cloud
+            </label>
+          </div>
+          <div class="form-actions">
+            <button id="btn-dupe-batch-refresh" class="btn btn-ghost btn-sm" type="button">Refresh preview</button>
+            <button id="btn-dupe-batch-start" class="btn btn-danger" type="button">Run full exact dedupe (permanent delete)</button>
+            <button id="btn-dupe-batch-cancel" class="btn btn-ghost" type="button" hidden>Cancel batch</button>
+          </div>
+          <div class="scan-bar" id="dupe-batch-bar" hidden><div id="dupe-batch-bar-fill"></div></div>
+          <div id="dupe-batch-status" class="status-block" hidden></div>
+        </div>
+        <div id="dupe-flash" class="dupe-flash" hidden></div>
+        <div id="dupe-bulk-bar" class="quarantine-bar" hidden>
+          <div class="quarantine-bar-text">
+            <strong>Bulk resolve</strong>
+            — select groups on this page, then resolve (keep one) or remove all files in those groups.
+          </div>
+          <div class="quarantine-bar-actions">
+            <button id="btn-dupe-select-all" class="btn btn-ghost btn-sm" type="button">Select all groups</button>
+            <button id="btn-dupe-clear" class="btn btn-ghost btn-sm" type="button">Clear</button>
+            <button id="btn-dupe-resolve-selected" class="btn btn-danger btn-sm" type="button">Resolve selected</button>
+            <button id="btn-dupe-remove-all-selected" class="btn btn-ghost btn-sm" type="button">Remove all in selected</button>
+          </div>
+        </div>
+        <div id="dupe-meta" class="scan-meta-line" hidden></div>
+        <div id="dupe-results" class="dupe-results"></div>
+        <div class="form-actions" id="dupe-pager" hidden>
+          <button id="btn-dupe-more" class="btn btn-ghost btn-sm">Load more</button>
+        </div>
+      </section>
+
+      <!-- Import -->
+      <section id="view-import" class="view">
+        <header class="view-header">
+          <h1>Import</h1>
+        </header>
+        <div class="panel">
+          <p class="help">
+            Point at a local folder (phone dump, SD card, downloads). Exact matches
+            already on My Cloud are skipped; optional near-duplicate check uses perceptual hash.
+          </p>
+          <div class="form-row">
+            <label>Source folder</label>
+            <input type="text" id="import-source" placeholder="C:\Users\You\Pictures\PhoneDump" />
+          </div>
+          <div class="form-row">
+            <label>Destination on My Cloud</label>
+            <input type="text" id="import-dest" value="Inbox" />
+          </div>
+          <div class="form-row">
+            <label class="inline-check">
+              <input type="checkbox" id="import-near" checked />
+              Skip near-duplicates too
+            </label>
+          </div>
+          <div class="form-actions">
+            <button id="btn-import-preview" class="btn btn-ghost">Preview</button>
+            <button id="btn-import-start" class="btn btn-primary">Import new files</button>
+            <button id="btn-import-cancel" class="btn btn-ghost" type="button" hidden>Cancel</button>
+          </div>
+          <div class="scan-bar" id="import-bar" hidden><div id="import-bar-fill"></div></div>
+          <div id="import-status" class="status-block"></div>
+          <pre id="import-report" class="report"></pre>
+        </div>
+      </section>
+
+      <!-- iCloud Archive -->
+      <section id="view-archive" class="view">
+        <header class="view-header">
+          <h1>iCloud Archive</h1>
+          <div class="header-actions">
+            <span id="icloud-conn-pill" class="muted-label">Not connected</span>
+          </div>
+        </header>
+
+        <div class="panel" id="archive-auth-panel">
+          <h2>Family accounts</h2>
+          <p id="icloud-auth-help" class="help">
+            Select a person and sign in with their Apple ID. Profiles keep separate sessions.
+          </p>
+          <div id="icloud-account-list" class="icloud-account-list"></div>
+          <div class="icloud-account-manage form-row">
+            <button type="button" id="btn-icloud-account-add" class="btn btn-ghost btn-sm">Add person</button>
+            <button type="button" id="btn-icloud-account-expand" class="btn btn-ghost btn-sm" hidden>Account…</button>
+            <button type="button" id="btn-icloud-logout" class="btn btn-ghost btn-sm">Sign out</button>
+          </div>
+          <div id="icloud-auth-summary" class="icloud-auth-summary" hidden></div>
+          <div id="icloud-auth-expandable" class="icloud-auth-expandable">
+            <form id="icloud-login-form" class="icloud-login-form" method="post" action="/api/icloud/auth" autocomplete="on">
+              <div class="form-row archive-auth-row">
+                <label for="icloud-apple-id">Apple ID</label>
+                <input
+                  type="email"
+                  id="icloud-apple-id"
+                  name="username"
+                  autocomplete="username"
+                  inputmode="email"
+                  autocapitalize="off"
+                  autocorrect="off"
+                  spellcheck="false"
+                  required
+                  placeholder="you@icloud.com"
+                />
+              </div>
+              <div class="form-row archive-auth-row">
+                <label for="icloud-password">Password</label>
+                <div class="password-field">
+                  <input
+                    type="password"
+                    id="icloud-password"
+                    name="password"
+                    autocomplete="current-password"
+                    required
+                    placeholder="Apple ID password"
+                  />
+                  <button
+                    type="button"
+                    id="btn-icloud-password-toggle"
+                    class="password-toggle"
+                    aria-label="Show password"
+                    aria-pressed="false"
+                    title="Show password"
+                    tabindex="-1"
+                  >
+                    <span class="password-toggle-label">Show</span>
+                  </button>
+                </div>
+              </div>
+              <div class="form-row archive-auth-row" id="icloud-2fa-row" hidden>
+                <label for="icloud-2fa">SMS code</label>
+                <div class="icloud-2fa-controls">
+                  <input
+                    type="text"
+                    id="icloud-2fa"
+                    name="one-time-code"
+                    inputmode="numeric"
+                    autocomplete="one-time-code"
+                    placeholder="6-digit code"
+                  />
+                  <button id="btn-icloud-2fa" class="btn btn-primary" type="button">Submit 2FA</button>
+                </div>
+                <label>Apple will text</label>
+                <div class="icloud-2fa-sms-row">
+                  <span id="icloud-2fa-phone-display" class="icloud-2fa-phone-display">Waiting for Apple’s trusted number…</span>
+                  <select id="icloud-2fa-phone" hidden aria-label="Trusted phone number for SMS"></select>
+                  <button id="btn-icloud-2fa-sms" class="btn btn-primary" type="button">Send SMS</button>
+                </div>
+                <p class="help" id="icloud-2fa-phone-help">
+                  Apple only texts a trusted number already on this Apple ID. You can’t type a different number here.
+                </p>
+              </div>
+              <div class="form-actions">
+                <button id="btn-icloud-login" class="btn btn-primary" type="submit">Sign in</button>
+                <button id="btn-icloud-2fa-resend" class="btn btn-ghost" type="button" hidden>Resend 2FA</button>
+                <button id="btn-icloud-reset" class="btn btn-ghost" type="button">Reset sign-in</button>
+              </div>
+            </form>
+          </div>
+          <div id="icloud-auth-status" class="status-block" role="status" aria-live="polite"></div>
+        </div>
+
+        <div class="panel archive-disclosure-panel" id="archive-inventory-panel">
+          <div class="archive-disclosure-head">
+            <button
+              type="button"
+              id="btn-inventory-toggle"
+              class="archive-disclosure-toggle"
+              aria-expanded="false"
+              aria-controls="inventory-body"
+            >
+              <span class="archive-disclosure-chevron" aria-hidden="true"></span>
+              <span class="archive-disclosure-title">Inventory</span>
+              <span id="inventory-summary" class="archive-disclosure-summary">Not refreshed yet</span>
+            </button>
+            <div class="archive-disclosure-actions">
+              <button id="btn-icloud-inventory" class="btn btn-ghost btn-sm" type="button">Refresh</button>
+              <button id="btn-icloud-inventory-cancel" class="btn btn-ghost btn-sm" type="button" hidden>Cancel</button>
+            </div>
+          </div>
+          <div id="inventory-body" class="archive-disclosure-body" hidden>
+            <p class="help">
+              Builds a local cache of dates and sizes so estimates and largest-first are fast.
+              First refresh can take a while.
+            </p>
+            <div class="job-progress-card" id="inventory-progress" hidden>
+              <div class="job-busy-head">
+                <div id="inventory-pct" class="job-busy-pct is-indet" aria-hidden="true">—</div>
+                <div class="job-busy-text">
+                  <strong id="inventory-progress-title">Inventory</strong>
+                  <span id="inventory-counts" class="job-busy-counts"></span>
+                </div>
+              </div>
+              <div class="scan-bar job-busy-bar" id="inventory-bar" hidden><div id="inventory-bar-fill"></div></div>
+            </div>
+            <div id="icloud-inventory-status" class="status-block"></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Keep window &amp; estimate</h2>
+          <p class="help">
+            Keep recent photos on iCloud. Archive older originals to the WD after a verified copy.
+          </p>
+          <div class="form-row">
+            <label>Filter mode</label>
+            <select id="archive-mode">
+              <option value="keep_years">Older than keep window</option>
+              <option value="date_range">Date range</option>
+              <option value="selected">Selected from pick list</option>
+            </select>
+          </div>
+          <div id="archive-keep-fields">
+            <div class="form-row">
+              <label>Keep on iCloud</label>
+              <div class="archive-keep-inline">
+                <input type="number" id="archive-keep-value" min="0.5" max="50" step="0.5" value="2" />
+                <select id="archive-keep-unit">
+                  <option value="years" selected>years</option>
+                  <option value="months">months</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div id="archive-range-fields" hidden>
+            <div class="form-row">
+              <label>From (inclusive)</label>
+              <input type="date" id="archive-range-start" />
+            </div>
+            <div class="form-row">
+              <label>Until (exclusive)</label>
+              <input type="date" id="archive-range-end" />
+            </div>
+          </div>
+          <details id="archive-options" class="archive-options">
+            <summary>Options</summary>
+            <div class="archive-options-body">
+              <div class="form-row">
+                <label>Destination on My Cloud</label>
+                <input type="text" id="archive-dest" value="FromiCloud" />
+              </div>
+              <div class="form-row">
+                <label class="inline-check">
+                  <input type="checkbox" id="archive-near" checked />
+                  Skip near-duplicates already on the WD
+                </label>
+              </div>
+              <div class="form-row">
+                <label class="inline-check">
+                  <input type="checkbox" id="archive-delete" />
+                  Delete from iCloud after verified on WD (Recently Deleted ~30 days)
+                </label>
+              </div>
+            </div>
+          </details>
+          <div class="form-actions">
+            <button id="btn-archive-estimate" class="btn btn-ghost" type="button">Estimate space</button>
+            <button id="btn-archive-start" class="btn btn-primary" type="button">Archive to WD</button>
+            <button id="btn-archive-cancel" class="btn btn-ghost" type="button" hidden>Cancel</button>
+          </div>
+          <div class="archive-estimate" id="archive-estimate">
+            <div class="archive-estimate-stat">
+              <span id="archive-est-count">—</span>
+              <label>assets</label>
+            </div>
+            <div class="archive-estimate-stat accent">
+              <span id="archive-est-bytes">—</span>
+              <label>would leave iCloud</label>
+            </div>
+            <div class="archive-estimate-stat">
+              <span id="archive-est-photos">—</span>
+              <label>photos</label>
+            </div>
+            <div class="archive-estimate-stat">
+              <span id="archive-est-videos">—</span>
+              <label>videos</label>
+            </div>
+            <div class="archive-estimate-stat">
+              <span id="archive-est-batches">—</span>
+              <label>batches</label>
+            </div>
+          </div>
+          <div class="scan-bar" id="archive-bar" hidden><div id="archive-bar-fill"></div></div>
+          <div id="archive-status" class="status-block"></div>
+          <pre id="archive-report" class="report"></pre>
+        </div>
+
+        <div class="panel" id="archive-pick-panel">
+          <h2>Pick assets</h2>
+          <p class="help">
+            Choose what to archive. Use <strong>Preview</strong> (or the thumbnail) to see
+            what’s in a file; check the box to select it for Estimate / Archive.
+          </p>
+          <div class="archive-pick-tabs" role="tablist" aria-label="Pick assets mode">
+            <button type="button" class="archive-pick-tab active" role="tab" aria-selected="true" data-pick-tab="largest" id="tab-pick-largest">Largest</button>
+            <button type="button" class="archive-pick-tab" role="tab" aria-selected="false" data-pick-tab="grid" id="tab-pick-grid">By date</button>
+          </div>
+          <div class="form-actions archive-pick-shared">
+            <button id="btn-archive-clear-sel" class="btn btn-ghost btn-sm" type="button">Clear selection</button>
+            <span id="archive-sel-count" class="sel-pill">0 selected</span>
+          </div>
+          <div id="archive-selection-summary" class="archive-selection-summary" hidden>
+            <strong id="archive-sel-summary-main">0 selected</strong>
+            <span id="archive-sel-summary-detail" class="archive-sel-summary-detail"></span>
+          </div>
+
+          <div id="archive-pick-largest" class="archive-pick-pane" role="tabpanel">
+            <div class="form-row archive-largest-controls">
+              <label for="archive-largest-media">Type</label>
+              <select id="archive-largest-media">
+                <option value="all" selected>All</option>
+                <option value="video">Videos</option>
+                <option value="photo">Photos</option>
+              </select>
+              <label for="archive-largest-limit">Show</label>
+              <select id="archive-largest-limit">
+                <option value="25">25</option>
+                <option value="50" selected>50</option>
+                <option value="100">100</option>
+              </select>
+              <label class="inline-check">
+                <input type="checkbox" id="archive-largest-entire" />
+                Entire inventory (ignore keep window)
+              </label>
+            </div>
+            <div class="form-actions">
+              <button id="btn-archive-largest" class="btn btn-ghost" type="button">Show largest</button>
+              <button id="btn-archive-largest-select" class="btn btn-ghost btn-sm" type="button">Select all listed</button>
+              <span id="archive-largest-meta" class="sel-pill">—</span>
+            </div>
+            <div id="archive-largest-list" class="archive-largest-list"></div>
+            <p id="archive-largest-footer" class="help archive-largest-footer"></p>
+          </div>
+
+          <div id="archive-pick-grid" class="archive-pick-pane" role="tabpanel" hidden>
+            <div class="form-actions">
+              <button id="btn-archive-load-grid" class="btn btn-ghost" type="button">Load matching grid</button>
+              <button id="btn-archive-select-page" class="btn btn-ghost btn-sm" type="button">Select page</button>
+            </div>
+            <div id="archive-grid" class="archive-grid"></div>
+            <div class="pager">
+              <button id="btn-archive-prev" class="btn btn-ghost btn-sm" type="button">Previous</button>
+              <span id="archive-pager-label"></span>
+              <button id="btn-archive-next" class="btn btn-ghost btn-sm" type="button">Next</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Organize -->
+      <section id="view-organize" class="view">
+        <header class="view-header">
+          <h1>Organize</h1>
+        </header>
+        <div class="panel">
+          <h2>By date</h2>
+          <p class="help">
+            Consolidate your library into dated folders (e.g. <code>2024/2024-07</code>).
+            Photos leave legacy folders like <code>Google Photos</code>, drive root, or custom albums.
+            Uses camera/EXIF date only (not file modified/upload time). Photos with
+            no date go to <code>Undated/</code>. Empty legacy folders can be removed when done.
+          </p>
+          <div class="form-row">
+            <label>Folder pattern</label>
+            <select id="org-pattern">
+              <option value="YYYY/YYYY-MM">2024/2024-07</option>
+              <option value="YYYY-MM">2024-07</option>
+              <option value="YYYY">2024</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label class="inline-check">
+              <input type="checkbox" id="org-consolidate" checked />
+              Consolidate — move out of all existing photo folders (recommended)
+            </label>
+          </div>
+          <div class="form-row">
+            <label class="inline-check">
+              <input type="checkbox" id="org-remove-empty" checked />
+              Remove empty folders afterward
+            </label>
+          </div>
+          <div class="form-row">
+            <label>Undated photos folder</label>
+            <input type="text" id="org-undated-folder" value="Undated" />
+          </div>
+          <div class="form-actions">
+            <button id="btn-org-all" class="btn btn-primary">Consolidate into dated folders</button>
+            <button id="btn-org-cancel" class="btn btn-ghost" type="button" hidden>Cancel</button>
+          </div>
+          <div class="scan-bar" id="org-bar" hidden><div id="org-bar-fill"></div></div>
+          <div id="org-status" class="status-block"></div>
+          <pre id="org-report" class="report" hidden></pre>
+
+          <h2 class="mt">Locked / inaccessible files</h2>
+          <p class="help">
+            Some NAS files (often under <code>Google Drive Old</code>) deny read access from Windows.
+            Preview then remove them from the <strong>app index only</strong> — files stay on the drive
+            until you unlock or delete them in the My Cloud dashboard.
+          </p>
+          <div class="form-row">
+            <label>Folder prefix</label>
+            <input type="text" id="org-purge-prefix" value="Google Drive Old" />
+          </div>
+          <div class="form-actions">
+            <button id="btn-org-purge-preview" class="btn btn-ghost" type="button">Preview inaccessible</button>
+            <button id="btn-org-purge" class="btn btn-danger" type="button">Remove from library index</button>
+          </div>
+          <div id="org-purge-status" class="status-block"></div>
+
+          <h2 class="mt">Move selected (from Browse)</h2>
+          <p class="help">Select photos in Browse, then move them here.</p>
+          <div class="form-row">
+            <label>Destination folder</label>
+            <input type="text" id="move-dest" placeholder="Trips/Italy2024" />
+          </div>
+          <div class="form-actions">
+            <button id="btn-move" class="btn btn-ghost">Move selected (<span id="sel-count">0</span>)</button>
+          </div>
+        </div>
+      </section>
+
+      </section>
+
+      <!-- People -->
+      <section id="view-people" class="view">
+        <header class="view-header">
+          <h1>People</h1>
+        </header>
+        <div class="panel">
+          <h2>Face scan</h2>
+          <p class="help">
+            Detects faces in library images (not videos), groups similar faces, and lets you
+            name people. Runs fully on this PC — nothing is uploaded. First scan can take a
+            long time; it resumes where it left off.
+          </p>
+          <div id="people-preview" class="status-block"></div>
+          <div class="form-actions">
+            <button id="btn-faces-preview" class="btn btn-ghost" type="button">Refresh counts</button>
+            <button id="btn-faces-scan" class="btn btn-primary" type="button">Scan faces</button>
+            <button id="btn-faces-cluster" class="btn btn-ghost" type="button">Cluster unknowns</button>
+            <button id="btn-faces-pause" class="btn btn-ghost" type="button" hidden>Pause</button>
+            <button id="btn-faces-resume" class="btn btn-primary" type="button" hidden>Resume</button>
+            <button id="btn-faces-cancel" class="btn btn-ghost" type="button" hidden>Cancel</button>
+          </div>
+          <div class="scan-bar" id="faces-bar" hidden><div id="faces-bar-fill"></div></div>
+          <div id="faces-status" class="status-block"></div>
+
+          <div id="faces-live" class="faces-live" hidden>
+            <div class="faces-live-stage">
+              <div class="faces-live-now" id="faces-live-now">
+                <div class="faces-live-now-frame">
+                  <img id="faces-live-now-img" alt="" hidden />
+                  <div id="faces-live-now-placeholder" class="faces-live-now-placeholder">Waiting for next photo…</div>
+                  <div class="faces-live-now-glow" aria-hidden="true"></div>
+                </div>
+                <div class="faces-live-now-meta">
+                  <strong id="faces-live-now-label">Now scanning</strong>
+                  <span id="faces-live-now-name" class="faces-live-now-name">—</span>
+                </div>
+              </div>
+              <div class="faces-live-side">
+                <div class="faces-live-ring-wrap" aria-hidden="true">
+                  <svg class="faces-live-ring" viewBox="0 0 120 120">
+                    <circle class="faces-live-ring-bg" cx="60" cy="60" r="52" />
+                    <circle class="faces-live-ring-fg" id="faces-live-ring-fg" cx="60" cy="60" r="52" />
+                  </svg>
+                  <div class="faces-live-ring-label">
+                    <span id="faces-live-pct">0%</span>
+                    <small id="faces-live-phase">idle</small>
+                  </div>
+                </div>
+                <div class="faces-pending-stack" aria-hidden="true">
+                  <div class="faces-pending-card"></div>
+                  <div class="faces-pending-card"></div>
+                  <div class="faces-pending-card faces-pending-top">
+                    <strong id="faces-stat-pending">0</strong>
+                    <span>pending</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="faces-live-stats" id="faces-live-stats">
+              <div class="faces-stat accent"><span id="faces-stat-faces">0</span><label>Faces found</label></div>
+              <div class="faces-stat"><span id="faces-stat-processed">0</span><label>Images done</label></div>
+              <div class="faces-stat"><span id="faces-stat-named">0</span><label>Auto-named</label></div>
+              <div class="faces-stat"><span id="faces-stat-errors">0</span><label>Errors</label></div>
+              <div class="faces-stat"><span id="faces-stat-rate">—</span><label>Images/sec</label></div>
+              <div class="faces-stat"><span id="faces-stat-eta">—</span><label>ETA</label></div>
+            </div>
+
+            <div class="faces-dual-bars" aria-hidden="true">
+              <div class="faces-dual-row">
+                <span>Done</span>
+                <div class="scan-bar"><div id="faces-done-fill"></div></div>
+              </div>
+              <div class="faces-dual-row">
+                <span>Pending</span>
+                <div class="scan-bar faces-pending-bar"><div id="faces-pending-fill"></div></div>
+              </div>
+            </div>
+
+            <div class="faces-live-mosaic-head">
+              <h3>Just found</h3>
+              <span id="faces-live-pulse" class="faces-live-pulse" hidden>Scanning</span>
+            </div>
+            <div id="faces-live-mosaic" class="faces-live-mosaic"></div>
+
+            <div class="faces-live-mosaic-head">
+              <h3>Recent photos</h3>
+            </div>
+            <div class="faces-photo-film" id="faces-photo-film" aria-hidden="true">
+              <div class="faces-photo-film-track" id="faces-photo-film-track"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel mt" id="people-named-panel">
+          <h2>Named people</h2>
+          <div id="people-named-grid" class="people-grid"></div>
+        </div>
+
+        <div class="panel mt" id="people-clusters-panel">
+          <h2>Needs a name</h2>
+          <p class="help">Largest unnamed face groups first. Open a group to name or ignore.</p>
+          <div id="people-clusters-grid" class="people-grid"></div>
+          <div class="form-actions" id="people-clusters-pager" hidden>
+            <button id="btn-clusters-prev" class="btn btn-ghost" type="button">Previous</button>
+            <span id="clusters-pager-label"></span>
+            <button id="btn-clusters-next" class="btn btn-ghost" type="button">Next</button>
+          </div>
+        </div>
+
+        <div class="panel mt" id="people-detail-panel" hidden>
+          <div class="form-actions" style="justify-content: space-between">
+            <button id="btn-people-back" class="btn btn-ghost" type="button">← Back</button>
+            <div id="people-detail-title"></div>
+          </div>
+          <div id="people-detail-faces" class="face-strip"></div>
+          <div class="form-row" id="people-name-row" hidden>
+            <label>Name</label>
+            <input type="text" id="people-name-input" list="people-name-suggestions" placeholder="e.g. Lillian Custodio" maxlength="80" />
+            <datalist id="people-name-suggestions"></datalist>
+          </div>
+          <div class="form-row" id="people-existing-row" hidden>
+            <label>Or pick existing</label>
+            <select id="people-existing-select">
+              <option value="">Select a named person…</option>
+            </select>
+          </div>
+          <div class="form-actions" id="people-name-actions" hidden>
+            <button id="btn-people-name" class="btn btn-primary" type="button">Save name</button>
+            <button id="btn-people-assign-existing" class="btn btn-ghost" type="button" hidden>Assign to selected</button>
+            <button id="btn-people-find-matches" class="btn btn-ghost" type="button" hidden>Find more photos</button>
+            <button id="btn-people-ignore-cluster" class="btn btn-ghost" type="button">Not a person</button>
+            <select id="people-merge-select" hidden></select>
+            <button id="btn-people-merge-into" class="btn btn-ghost" type="button" hidden>Merge into…</button>
+          </div>
+          <div id="people-matches-panel" class="people-matches-panel" hidden>
+            <div class="faces-live-mosaic-head">
+              <h3>Possible matches</h3>
+              <span id="people-matches-status" class="muted-label"></span>
+            </div>
+            <div class="form-actions">
+              <button id="btn-people-matches-select-auto" class="btn btn-ghost btn-sm" type="button">Select likely</button>
+              <button id="btn-people-matches-select-all" class="btn btn-ghost btn-sm" type="button">Select all</button>
+              <button id="btn-people-matches-clear" class="btn btn-ghost btn-sm" type="button">Clear</button>
+              <button id="btn-people-matches-accept" class="btn btn-primary btn-sm" type="button">Add selected</button>
+            </div>
+            <div id="people-matches-grid" class="people-matches-grid"></div>
+          </div>
+          <div class="form-actions" id="people-photos-toolbar" hidden>
+            <label class="inline-label" for="people-sort-filter">Sort</label>
+            <select id="people-sort-filter" title="Sort this person’s photos">
+              <option value="date_desc">Date taken · newest</option>
+              <option value="date_asc">Date taken · oldest</option>
+              <option value="mtime_desc">File added · newest</option>
+              <option value="mtime_asc">File added · oldest</option>
+              <option value="name_asc">Name · A–Z</option>
+              <option value="name_desc">Name · Z–A</option>
+            </select>
+          </div>
+          <div id="people-detail-photos" class="photo-grid"></div>
+          <div class="pager" id="people-detail-pager" hidden>
+            <button id="btn-people-photos-prev" class="btn btn-ghost btn-sm" type="button">Previous</button>
+            <span id="people-photos-pager-label"></span>
+            <button id="btn-people-photos-next" class="btn btn-ghost btn-sm" type="button">Next</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- File Converter -->
+      <section id="view-converter" class="view">
+        <header class="view-header">
+          <h1>File Converter</h1>
+        </header>
+        <div class="panel">
+          <h2>RAW / misnamed camera files → JPEG</h2>
+          <p class="help">
+            Converts camera RAW files and misnamed exports (e.g. JPEGs with a
+            <code>.NEF</code> extension) into proper JPEGs in dated folders.
+            Originals move to <code>_quarantine_raw</code> (recoverable) so Browse
+            stays clean without keeping unused RAW.
+          </p>
+          <div class="form-row">
+            <label>Destination folder pattern</label>
+            <select id="raw-pattern">
+              <option value="YYYY/YYYY-MM">2024/2024-07</option>
+              <option value="YYYY-MM">2024-07</option>
+              <option value="YYYY">2024</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label class="inline-check">
+              <input type="checkbox" id="raw-quarantine" checked />
+              Move originals to <code>_quarantine_raw</code> after convert
+            </label>
+          </div>
+          <div class="form-actions">
+            <button id="btn-raw-preview" class="btn btn-ghost" type="button">Preview files</button>
+            <button id="btn-raw-start" class="btn btn-primary" type="button">Convert to JPEG</button>
+            <button id="btn-raw-cancel" class="btn btn-ghost" type="button" hidden>Cancel</button>
+          </div>
+          <div class="scan-bar" id="raw-bar" hidden><div id="raw-bar-fill"></div></div>
+          <div id="raw-status" class="status-block"></div>
+          <pre id="raw-report" class="report" hidden></pre>
+        </div>
+      </section>
+
+      <!-- Settings -->
+      <section id="view-settings" class="view">
+        <header class="view-header">
+          <h1>Settings</h1>
+        </header>
+        <div class="panel">
+          <h2>My Cloud photo root</h2>
+          <p class="help">
+            Enable Local Network Access on your My Cloud Home, map the share in Windows,
+            then paste the path to your photos folder (drive letter or UNC).
+          </p>
+          <div class="form-row">
+            <label>PHOTO_ROOT</label>
+            <input type="text" id="photo-root" placeholder="Z:\Photos or \\MYCLOUD-XXXX\User\Photos" />
+          </div>
+          <h2>Scan performance</h2>
+          <p class="help">
+            How many photos to analyze at once over SMB. On My Cloud Home, <strong>1–2</strong> is often
+            faster than 3+. Does not change scan detail — only concurrency. Takes effect on the next scan.
+          </p>
+          <div class="form-row">
+            <label>SCAN_WORKERS</label>
+            <input type="number" id="scan-workers" min="1" max="8" step="1" value="3" />
+          </div>
+          <div class="form-actions">
+            <button id="btn-save-settings" class="btn btn-primary">Save</button>
+          </div>
+          <div id="settings-status" class="status-block"></div>
+
+          <h2 class="mt">Fill missing dates</h2>
+          <p class="help">
+            Many photos have no camera EXIF date but live in folders like
+            <code>2026/2026-02</code>, or have dates in the filename
+            (e.g. screenshots). Preview then apply to set dates in the library index
+            so year filters and “Date · newest” work. Does not rewrite the image files.
+            Existing EXIF dates are never overwritten.
+          </p>
+          <div class="form-actions">
+            <button id="btn-date-backfill-preview" class="btn btn-ghost" type="button">Preview</button>
+            <button id="btn-date-backfill-apply" class="btn btn-primary" type="button">Fill missing dates</button>
+          </div>
+          <div id="date-backfill-status" class="status-block"></div>
+          <pre id="date-backfill-report" class="report" hidden></pre>
+
+          <h2 class="mt">Junk &amp; corrupt cleanup</h2>
+          <p class="help">
+            Permanently deletes macOS <code>._*</code> sidecar junk, OS junk files, and
+            <strong>unindexed</strong> media that cannot be opened (truncated/corrupt).
+            Indexed photos in your library are not touched. Preview first — delete cannot be undone.
+          </p>
+          <div class="form-row">
+            <label class="inline-check">
+              <input type="checkbox" id="cleanup-junk" checked />
+              Delete AppleDouble / OS junk (<code>._*</code>, Thumbs.db, …)
+            </label>
+          </div>
+          <div class="form-row">
+            <label class="inline-check">
+              <input type="checkbox" id="cleanup-corrupt" checked />
+              Delete unreadable unindexed media (truncated/corrupt)
+            </label>
+          </div>
+          <div class="form-actions">
+            <button id="btn-cleanup-preview" class="btn btn-ghost" type="button">Preview cleanup</button>
+            <button id="btn-cleanup-start" class="btn btn-danger" type="button">Delete permanently</button>
+            <button id="btn-cleanup-cancel" class="btn btn-ghost" type="button" hidden>Cancel</button>
+          </div>
+          <div class="scan-bar" id="cleanup-bar" hidden><div id="cleanup-bar-fill"></div></div>
+          <div id="cleanup-status" class="status-block"></div>
+          <pre id="cleanup-report" class="report"></pre>
+
+          <ol class="steps">
+            <li>Open the My Cloud Home dashboard on your home Wi‑Fi (connection type: Local).</li>
+            <li>Enable <strong>Local Network Access</strong> and create a username/password.</li>
+            <li>In File Explorer: Map network drive to <code>\\HOSTNAME\share</code>.</li>
+            <li>Paste that path above and run <strong>Scan library</strong>.</li>
+          </ol>
+          <p class="help planned-note">
+            People face scan is available in the People tab. AI semantic search is not built in —
+            Immich is an option if you want that later. Search by filename/folder and filter by year on Browse.
+          </p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Lightbox -->
+  <div id="lightbox" class="lightbox hidden">
+    <button class="lightbox-close" id="lightbox-close">&times;</button>
+    <img id="lightbox-img" alt="" />
+    <video id="lightbox-video" controls playsinline class="hidden"></video>
+    <div class="lightbox-meta" id="lightbox-meta"></div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

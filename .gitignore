@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# App data (local index + thumbnails)
+data/
+testdata/
+tests/_tmp_testdata/
+.pytest_cache/
+
+# Local scratch / previews (not part of the app)
+.video_preview/
+_tmp_*.jpg
+_diag_*.py
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+Desktop.ini
+.DS_Store
